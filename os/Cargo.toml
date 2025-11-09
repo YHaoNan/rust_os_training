@@ -1,0 +1,23 @@
+[package]
+name = "os"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+riscv = { version = "0.15.0" }
+lazy_static = { version = "1.4.0", features = ["spin_no_std"] }
+
+[features]
+board_qemu = []
+board_k210 = []
+
+[profile.dev]
+panic = "abort"
+debug = true
+
+[profile.release]
+panic = "abort"
+debug = 1  # 或 2 以包含更多调试信息
+
+[package.metadata.lints.rust]
+missing_docs = "allow"
