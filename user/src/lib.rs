@@ -22,6 +22,8 @@ fn main() -> i32 { // this function provided by user program.
 }
 
 
+use core::arch::asm;
+use core::ptr;
 fn clear_bss() {
     unsafe extern "C" {
         fn start_bss();
@@ -34,6 +36,7 @@ fn clear_bss() {
 
 use syscall::*;
 
+
 pub fn write(fd: usize, buf: &[u8]) -> isize {
     sys_write(fd, buf)
 }
@@ -41,3 +44,35 @@ pub fn exit(exit_code: i32) -> isize {
     sys_exit(exit_code)
 }
 
+
+// 获取当前堆栈情况，以从顶到下的顺序放置到result中
+pub fn stack_trace() {
+
+    let mut fp: *const usize;
+    let mut curr = 0;
+
+    unsafe {
+        core::arch::asm!(
+            "mv {}, fp",
+            out(reg) fp
+        );
+    }
+
+    println!("======START OF STACK======");
+
+    while fp != ptr::null() {
+        unsafe {
+
+            let ra = *fp.sub(1);
+            let saved_fp = *fp.sub(2);
+
+            println!("Stack fp = {:016x}", ra);
+
+            fp = saved_fp as *const usize;
+            curr += 1;
+        }
+    }
+
+    println!("======END OF STACK======");
+
+}
