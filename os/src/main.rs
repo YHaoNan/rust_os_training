@@ -3,6 +3,8 @@
 
 use core::arch::global_asm;
 
+use crate::stack::{KERNEL_STACK, USER_STACK};
+
 #[cfg(feature = "board_qemu")]
 #[path = "boards/qemu.rs"]
 mod board;
@@ -15,6 +17,9 @@ mod sbi;
 mod sync;
 pub mod syscall;
 pub mod trap;
+mod stack;
+mod common;
+mod loader;
 
 global_asm!(include_str!("entry.asm"));
 global_asm!(include_str!("link_app.S"));
@@ -31,12 +36,22 @@ fn clear_bss() {
     }
 }
 
+fn print_stack_info() {
+    println!("[kernel] ==============Stack Info=============");
+    println!("[kernel] User stack num: {}, Kernel stack num: {}", USER_STACK.len(), KERNEL_STACK.len());
+    println!("[kernel] ==============Stack Info=============");
+}
+
 /// the rust entry-point of os
 #[unsafe(no_mangle)]
 pub fn rust_main() -> ! {
     clear_bss();
-    println!("[kernel] Hello, world!");
-    trap::init();
-    batch::init();
-    batch::run_next_app();
+    print_stack_info();
+    loader::init();
+    // println!("[kernel] Hello, world!");
+    // trap::init();
+    // loader::init_loader();
+    // batch::init();
+    // batch::run_next_app();
+    loop {}
 }
