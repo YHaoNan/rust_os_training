@@ -20,7 +20,7 @@ pub struct TaskManagerInner {
 impl TaskManager {
 
     fn run_first_task(&self) {
-        let mut inner = TASK_MANAGER.inner.exclusive_access();
+        let mut inner = self.inner.exclusive_access();
         // 1. pick the first task
         inner.tcbs[0].status = TaskStatus::Running;
         // for i in 0..24 {
@@ -46,9 +46,9 @@ impl TaskManager {
     }
 
     fn find_next_task(&self) -> Option<usize> {
-        let inner = TASK_MANAGER.inner.exclusive_access();
+        let inner = self.inner.exclusive_access();
 
-        for i in (inner.current_task_idx)..(inner.current_task_idx + TASK_MANAGER.task_num) {
+        for i in (inner.current_task_idx + 1)..(inner.current_task_idx + self.task_num + 1) {
             let idx = i % TASK_MANAGER.task_num;
             let tcb = &inner.tcbs[idx];
             if TaskStatus::Ready == tcb.status {
@@ -62,15 +62,17 @@ impl TaskManager {
     fn run_next_task(&self) {
         // 1. pick the next task
         if let Some(next_idx) = self.find_next_task() {
-            let mut inner = TASK_MANAGER.inner.exclusive_access();
+            let mut inner = self.inner.exclusive_access();
             let current_idx = inner.current_task_idx;
 
             // 2. save the context of current task
             let current_task_ctx_ptr = &mut inner.tcbs[current_idx].ctx as *mut TaskContext;
             let next_task_ctx_ptr = &inner.tcbs[next_idx].ctx as *const TaskContext;
 
-            inner.tcbs[current_idx].status = TaskStatus::Ready;
             inner.tcbs[next_idx].status = TaskStatus::Running;
+            inner.current_task_idx = next_idx;
+
+            // println!("[kernel] run next {} curr {}", next_idx, current_idx);
 
             drop(inner);
 
