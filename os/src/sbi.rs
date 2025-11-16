@@ -2,6 +2,7 @@
 
 use core::arch::asm;
 
+const SBI_SET_TIMER: usize = 0;
 const SBI_CONSOLE_PUTCHAR: usize = 1;
 
 #[cfg(feature = "board_k210")]
@@ -29,6 +30,12 @@ fn sbi_call(which: usize, arg0: usize, arg1: usize, arg2: usize) -> usize {
         );
     }
     ret
+}
+
+
+/// use sbi call to set timer
+pub fn set_timer(timer: usize) {
+    sbi_call(SBI_SET_TIMER, timer, 0, 0);
 }
 
 /// use sbi call to putchar in console (qemu uart handler)

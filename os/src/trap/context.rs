@@ -12,16 +12,21 @@ impl TrapContext {
         self.x[2] = sp;
     }
 
-    pub fn app_init_context(entry: usize, sp: usize) -> Self {
+    pub fn app_init_context(entry: usize, sp: usize) -> Self { // 应用初始TrapContext
+        println!("app_init_context: entry => {:#x}, sp => {:#x}", entry, sp);
         // entry = 应用程序入口, sp = 用户栈地址
         let mut sstatus = sstatus::read(); // CSR sstatus
         sstatus.set_spp(SPP::User); //previous privilege mode: user mode
         let mut cx = Self {
-            x: [0; 32],
-            sstatus,
-            sepc: entry
+            x: [0; 32], // zero reg files
+            sstatus,    // user mode previously
+            sepc: entry // sepc to entry
         };
-        cx.set_sp(sp);
+        cx.set_sp(sp);  // sp to user stack
+        // when `ret` executed
+        // 1. reg files will be recovered
+        // 2. set pc to sepc (user program entry)
+        // 3. set sp = $sp (user stack)
         cx
     }
 }

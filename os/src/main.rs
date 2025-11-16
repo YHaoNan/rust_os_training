@@ -19,7 +19,8 @@ pub mod syscall;
 pub mod trap;
 mod stack;
 mod common;
-mod loader;
+mod multitask;
+mod timer;
 
 global_asm!(include_str!("entry.asm"));
 global_asm!(include_str!("link_app.S"));
@@ -46,12 +47,14 @@ fn print_stack_info() {
 #[unsafe(no_mangle)]
 pub fn rust_main() -> ! {
     clear_bss();
+    println!("[kernel] Hello, world!");
+
     print_stack_info();
-    loader::init();
-    // println!("[kernel] Hello, world!");
-    // trap::init();
-    // loader::init_loader();
-    // batch::init();
-    // batch::run_next_app();
+    multitask::init();
+    trap::init();
+    trap::enable_timer_interrupt();
+    timer::set_next_trigger();
+    multitask::run_first_task();
+
     loop {}
 }

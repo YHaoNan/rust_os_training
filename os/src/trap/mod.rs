@@ -4,12 +4,14 @@
 
 mod context;
 
-use crate::batch::run_next_app;
+use crate::multitask::{exit_and_run_next, suspend_and_run_next};
+use crate::timer::set_next_trigger;
 use core::arch::global_asm;
 use crate::syscall::syscall;
 use riscv::register::{
     scause,
     stval,
+    sie,
 };
 use riscv::interrupt::{Trap};
 use riscv::interrupt::supervisor::{Interrupt, Exception};
@@ -18,7 +20,9 @@ use riscv::register::stvec::{self, Stvec, TrapMode};
 
 global_asm!(include_str!("trap.S"));
 
+
 pub fn init() {
+    println!("[kernel] ==============Trap Init=============");
     unsafe extern "C" {
         fn __alltraps();
     }
@@ -27,7 +31,16 @@ pub fn init() {
     unsafe {
         stvec::write(val); // 将__alltraps写入中断向量表
     }
+    println!("[kernel] ==============Trap Init=============");
 }
+
+/// timer interrupt enabled
+pub fn enable_timer_interrupt() {
+    unsafe {
+        sie::set_stimer();
+    }
+    println!("[kernel] ==============Timer Interrupt Enabled=============");
+} 
 
 #[unsafe(no_mangle)]
 /// handle an interrupt, exception, or system call from user space
@@ -45,14 +58,18 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
             Exception::UserEnvCall => {
                 cx.sepc += 4;
                 cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
-            },
+            }
             Exception::StoreFault | Exception::StorePageFault => {
                 println!("[kernel] PageFault in application, kernel killed it.");
-                run_next_app();
+                exit_and_run_next();
             }
             Exception::IllegalInstruction => {
                 println!("[kernel] IllegalInstruction in application, kernel killed it.");
-                run_next_app();
+                exit_and_run_next();
+            }
+            Exception::InstructionFault => {
+                println!("[kernel] InstructionFault in application, kernel killed it.");
+                exit_and_run_next();
             }
             _ => {
                 panic!(
@@ -62,9 +79,22 @@ pub fn trap_handler(cx: &mut TrapContext) -> &mut TrapContext {
                 );
             }
         }, 
+        Trap::Interrupt(i) => match i {
+            Interrupt::SupervisorTimer => {
+                set_next_trigger();
+                suspend_and_run_next();
+            },
+            _ => {
+                panic!(
+                    "Unsupported interrupt {:?}, stval = {:#x}!",
+                    scause_reg.code(),
+                    stval
+                );
+            }
+        }
         _ => {
             panic!(
-                "Unsupported trap {:?}, stval = {:#x}!",
+                "Unsupported scause {:?}, stval = {:#x}!",
                 scause_reg.code(),
                 stval
             );

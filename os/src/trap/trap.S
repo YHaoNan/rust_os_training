@@ -35,21 +35,45 @@ __alltraps:
     # set TrapContext address to trap_handler argument
     call trap_handler
 
+# __restore:
+#     mv sp, a0
+#     # 将返回值给sp，返回值就是TrapContext的地址
+# 
+#     # 将控制寄存器恢复
+#     ld t0, 32*8(sp)
+#     ld t1, 33*8(sp)
+#     ld t2, 2*8(sp)
+#     
+# 
+#     csrw sstatus, t0
+#     csrw sepc, t1
+#     csrw sscratch, t2
+# 
+#     # 将通用寄存器恢复
+#     ld x1, 1*8(sp)
+#     ld x3, 3*8(sp)
+#     .set n, 5
+#     .rept 27
+#         LOAD_GP %n
+#         .set n, n+1
+#     .endr
+# 
+#     addi sp, sp, 34*8
+#     # 归还栈空间
+#     csrrw sp, sscratch, sp
+#     # sp->user stack, sscratch->kernel stack
+#     sret
+# 
 __restore:
-    mv sp, a0
-    # 将返回值给sp，返回值就是TrapContext的地址
-
-    # 将控制寄存器恢复
+    # now sp->kernel stack(after allocated), sscratch->user stack
+    # restore sstatus/sepc
     ld t0, 32*8(sp)
     ld t1, 33*8(sp)
     ld t2, 2*8(sp)
-    
-
     csrw sstatus, t0
     csrw sepc, t1
     csrw sscratch, t2
-
-    # 将通用寄存器恢复
+    # restore general-purpuse registers except sp/tp
     ld x1, 1*8(sp)
     ld x3, 3*8(sp)
     .set n, 5
@@ -57,9 +81,8 @@ __restore:
         LOAD_GP %n
         .set n, n+1
     .endr
-
+    # release TrapContext on kernel stack
     addi sp, sp, 34*8
-    # 归还栈空间
+    # now sp->kernel stack, sscratch->user stack
     csrrw sp, sscratch, sp
-    # sp->user stack, sscratch->kernel stack
     sret

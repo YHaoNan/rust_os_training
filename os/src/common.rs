@@ -12,3 +12,8 @@ pub const APP_ENTRY_POINT: usize = 0x80400000;
 
 // 用户程序大小
 pub const APP_SIZE: usize = 0x20000;
+
+// #[cfg(feature = "board_k210")]
+// pub const CLOCK_FREQ: usize = 403000000 / 62;
+
+pub const CLOCK_FREQ: usize = 12500000;
