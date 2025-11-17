@@ -84,7 +84,7 @@ impl TaskManager {
             }
             
         } else {
-            panic!("[kernel] all task has been completed!");
+            println!("[kernel] all task has been completed!");
             loop {}
         }
     }
