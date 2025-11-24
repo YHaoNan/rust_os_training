@@ -1,4 +1,4 @@
-use crate::multitask::{TASK_MANAGER, exit_and_run_next, suspend_and_run_next};
+use crate::multitask::{exit_and_run_next, suspend_and_run_next};
 use crate::timer::get_time_ms;
 
 pub fn sys_exit(exit_code: i32) -> ! {

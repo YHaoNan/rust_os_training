@@ -1,3 +1,4 @@
+#![feature(alloc_error_handler)]
 #![no_std]
 #![no_main]
 
@@ -11,7 +12,6 @@ mod board;
 
 #[macro_use]
 mod console;
-pub mod batch;
 mod lang_items;
 mod sbi;
 mod sync;
@@ -21,6 +21,8 @@ mod stack;
 mod common;
 mod multitask;
 mod timer;
+mod memory;
+extern crate alloc;
 
 global_asm!(include_str!("entry.asm"));
 global_asm!(include_str!("link_app.S"));
@@ -50,6 +52,7 @@ pub fn rust_main() -> ! {
     println!("[kernel] Hello, world!");
 
     print_stack_info();
+    memory::init();
     multitask::init();
     trap::init();
     trap::enable_timer_interrupt();

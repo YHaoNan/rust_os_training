@@ -1,11 +1,14 @@
-use core::ptr;
+use core::{num, ptr};
 
 use lazy_static::*;
 use crate::{common::*, multitask::{switch::__switch, task::{TCB, TaskContext, TaskStatus}}, sync::UPSafeCell, trap::TrapContext, stack::{KERNEL_STACK, USER_STACK}};
 use core::arch::asm;
+use alloc::vec::Vec;
+use loader::{get_app_data, get_num_app};
 mod task;
 mod sched;
 mod switch;
+mod loader;
 
 pub struct TaskManager {
     task_num: usize,
@@ -13,7 +16,7 @@ pub struct TaskManager {
 }
 
 pub struct TaskManagerInner {
-    tcbs: [TCB; APP_NUM],
+    tcbs: Vec<TCB>,
     current_task_idx: usize
 }
 
@@ -105,6 +108,11 @@ impl TaskManager {
         self.mark_current_status(TaskStatus::Exited);
         self.run_next_task();
     }
+
+    pub fn get_current_token(&self) -> usize {
+        let inner = self.inner.exclusive_access();
+        inner.tcbs[inner.current_task_idx].memory_space.token()
+    }
     
 }
 
@@ -116,64 +124,33 @@ pub fn init() {
 }
 
 lazy_static! {
+    /// 在当前版本的TaskManager中，不需要再有复杂的加载代码
+    /// 而是将标准的elf格式应用交给TCB处理，创建对应的MemorySpace
+
     pub static ref TASK_MANAGER: TaskManager =  { 
+
         unsafe extern "C" {
             fn _num_app();
         }
 
-        let mut tcbs: [TCB; APP_NUM] = [
-            TCB::empty(); APP_NUM
-        ];
+        let mut tasks: Vec<TCB> = Vec::new();
 
-        let mut manager = TaskManager {
+        let num_app = get_num_app();
+        for i in 0..num_app {
+            println!("[kernel] load task {}", i);
+            tasks.push(TCB::new(get_app_data(i), i));
+            println!("[kernel] task {} loaded", i);
+        }
+
+        let manager = TaskManager {
             task_num: 0,
             inner: unsafe {
                 UPSafeCell::new(
-                    TaskManagerInner { tcbs: tcbs, current_task_idx: 0 }
+                    TaskManagerInner { tcbs: tasks, current_task_idx: 0 }
                 )
             }
         };
-
-        // load tasks
-        unsafe {
-            let num_app_ptr = _num_app as usize as *const usize;
-            let num_app = num_app_ptr.read_volatile();
-            let mut app_start: [usize; APP_NUM + 1] = [0; APP_NUM + 1];
-            let app_start_raw: &[usize] =
-                core::slice::from_raw_parts(num_app_ptr.add(1), num_app + 1);
-            app_start[..=num_app].copy_from_slice(app_start_raw);
-
-            asm!("fence.i");
-
-            let mut inner = manager.inner.exclusive_access();
-            for idx in 0..num_app {
-                println!("[kernel] load task {}", idx);
-                // prepare tcb
-                manager.task_num = num_app;
-                inner.tcbs[idx].entry_ptr = app_start[idx];
-                inner.tcbs[idx].id = idx;
-                inner.tcbs[idx].status = TaskStatus::Ready;
-                // make initial context
-                //  1. ra pointing to kernel __restore function
-                //  2. all register is zero
-                //  3. sp pointing to it's kernel stack
-                //  4. kernel stack return to user stack and set pc to user program address
-                inner.tcbs[idx].ctx = TaskContext::goto_restore(init_app_cx(idx));
-                println!("[kernel] task {} tcb is ready", idx);
-
-                println!("[kernel] loading task {} from {:#x} to {:#x}", idx, app_start[idx], APP_ENTRY_POINT + idx * APP_SIZE);
-
-                // load task code
-                let task_start_src = app_start[idx] as *const u8;
-                let task_start_dst = (APP_ENTRY_POINT + idx * APP_SIZE) as *mut u8;
-                let task_len = APP_SIZE;
-
-                ptr::copy(task_start_src, task_start_dst, task_len);
-                println!("[kernel] task {} loaded from {:#x} to {:#x}", idx, app_start[idx], APP_ENTRY_POINT + idx * APP_SIZE);
-
-            }
-        }
-
+        
         //  make tasks initial context and status
         println!("[kernel] task manager initialized!");
         manager
@@ -193,23 +170,6 @@ pub fn exit_and_run_next() {
     TASK_MANAGER.mark_current_exit_and_run_next();
 }
 
-/// get app info with entry and sp and save `TrapContext` in kernel stack
-pub fn init_app_cx(app_id: usize) -> usize {
-    let task_start_dst = APP_ENTRY_POINT + app_id * APP_SIZE;
-    println!("[kernel] init_app_cx. entry {:#x}", task_start_dst);
-    let result = KERNEL_STACK[app_id].push_context(TrapContext::app_init_context(
-        task_start_dst,
-        USER_STACK[app_id].get_sp(),
-    ));
-    // for i in 0..24 {
-    //     println!("{:#x} {:#x} {:#x} {:#x} {:#x} {:#x}", 
-    //         KERNEL_STACK[app_id].data[KERNEL_STACK[app_id].data.len()-(i * 6 + 6)],
-    //         KERNEL_STACK[app_id].data[KERNEL_STACK[app_id].data.len()-(i * 6 + 5)],
-    //         KERNEL_STACK[app_id].data[KERNEL_STACK[app_id].data.len()-(i * 6 + 4)],
-    //         KERNEL_STACK[app_id].data[KERNEL_STACK[app_id].data.len()-(i * 6 + 3)],
-    //         KERNEL_STACK[app_id].data[KERNEL_STACK[app_id].data.len()-(i * 6 + 2)],
-    //         KERNEL_STACK[app_id].data[KERNEL_STACK[app_id].data.len()-(i * 6 + 1)],
-    //     );
-    // }
-    result
+pub fn current_user_token() -> usize {
+    TASK_MANAGER.get_current_token()
 }
